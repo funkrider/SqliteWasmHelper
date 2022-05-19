@@ -6,8 +6,12 @@
 
 <PageTitle>Index</PageTitle>
 
+<PeopleUI></PeopleUI>
+
+<br/>
+
 <p>Type some thing:</p>
-<input @bind="newThing" disabled="@busy" />&nbsp;
+<input @bind="newThing" disabled="@busy" />
 <button @onclick="@(async () => await AddThingAsync())" disabled="@busy">Add</button>
 
 @if (@busy)
@@ -48,13 +52,14 @@ Download backup:
 
     private async Task RefreshUiAsync()
     {
-        using var ctx = await Factory.CreateDbContextAsync();
+	    await using var ctx = await Factory.CreateDbContextAsync();
         busy = true;
         things = await ctx.Things.ToArrayAsync();
-        await bl.RefreshAsync();
+        //await bl.RefreshAsync();
         busy = false;
         StateHasChanged();
     }
+
 
     private async Task AddThingAsync()
     {

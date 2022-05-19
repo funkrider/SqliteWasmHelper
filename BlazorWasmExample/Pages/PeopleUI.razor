@@ -1,0 +1,98 @@
+﻿@using SqliteWasmHelper
+@using BlazorWasmExample.Data
+@using Microsoft.EntityFrameworkCore
+@using Ardalis.Specification
+@using Ardalis.Specification.EntityFrameworkCore
+
+@inject ISqliteWasmDbContextFactory<ThingContext> DbCtxFactory
+
+<p>Type some Person:</p>
+<input @bind="newPerson" disabled="@busy" />
+<button @onclick="@(async () => await AddPersonAsync())" disabled="@busy">Add</button>
+
+<PersonUI SelectedPersonId="@SelectedPersonId"></PersonUI>
+
+@if (@busy)
+{
+	<div class="alert alert-info">💾 Scanning a floppy disk...</div>
+}
+else
+{
+	if (people.Length < 1)
+	{
+		<p>I see no people.</p>
+	}
+	else
+	{
+		<ul>
+			@foreach (var person in people)
+			{
+				<li @onclick="() => SetSelectedPerson(person.Id)">@person.Name</li>
+			}
+		</ul>
+	}
+}
+
+
+@code {
+	private bool busy = true;
+	private string newPerson = string.Empty;
+	
+	private Person[] people = Array.Empty<Person>();
+
+	private int SelectedPersonId { get; set; }
+
+
+	private ISpecification<Person> Query => new AllPeopleSpec();
+
+
+	protected override async Task OnInitializedAsync()
+	{
+		busy = true;
+		StateHasChanged();
+
+		await RefreshPeople();
+
+		busy = false;
+		StateHasChanged();
+		
+		await base.OnInitializedAsync();
+	}
+
+
+	private async Task RefreshPeople()
+	{
+		await using var ctx = await DbCtxFactory.CreateDbContextAsync();
+		
+		people = await ctx.Persons.ToArrayAsync();
+	}
+
+
+
+	private async Task SetSelectedPerson(int personId)
+	{
+		SelectedPersonId = personId;
+	}
+
+
+	private async Task AddPersonAsync()
+	{
+		if (!string.IsNullOrWhiteSpace(newPerson))
+		{
+			busy = true;
+			StateHasChanged();
+
+			await using var ctx = await DbCtxFactory.CreateDbContextAsync();
+			ctx.Persons.Add(new Person() { Name = newPerson });
+			
+			await ctx.SaveChangesAsync();
+			newPerson = string.Empty;
+
+			await RefreshPeople();
+
+			busy = false;
+			StateHasChanged();
+		}
+	}
+
+}

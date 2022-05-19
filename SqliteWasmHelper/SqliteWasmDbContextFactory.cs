@@ -3,6 +3,7 @@
 // </copyright>
 
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 
 namespace SqliteWasmHelper
 {
@@ -82,6 +83,33 @@ namespace SqliteWasmHelper
             }
 
             // hook into saved changes
+            // By using lambda's as a wrapper we avoid the need to dispose the listener...
+            ctx.SavingChanges += (o, e) => Ctx_SavingChanges(ctx, e);
+            ctx.SaveChangesFailed += (o, e) => Ctx_SaveChangesFailed(ctx, e);
+            ctx.SavedChanges += (o, e) => Ctx_SavedChanges(ctx, e);
+
+            ctx.ChangeTracker.StateChanged += (o, e) => ChangeTracker_StateChanged(ctx, e);
+
+            return ctx;
+        }
+
+
+        public TContext CreateDbContext()
+        {
+            // first time should wait for restore to happen
+            CheckForStartupTaskAsync();
+
+            // grab the context
+            var ctx = dbContextFactory.CreateDbContext();
+
+            if (!init)
+            {
+                // first time, it should be created
+                ctx.Database.EnsureCreated();
+                init = true;
+            }
+
+            // hook into saved changes
             ctx.SavedChanges += (o, e) => Ctx_SavedChanges(ctx, e);
 
             return ctx;
@@ -134,15 +162,50 @@ namespace SqliteWasmHelper
             if (startupTask != null)
             {
                 lastStatus = await startupTask;
+            }
+
+            if (startupTask != null)
+            {
                 startupTask.Dispose();
                 startupTask = null;
             }
         }
 
-        private async void Ctx_SavedChanges(TContext ctx, SavedChangesEventArgs e)
+        private async void Ctx_SavingChanges(object? ctx, SavingChangesEventArgs e)
         {
-            await ctx.Database.CloseConnectionAsync();
+            var changes = (ctx as TContext).ChangeTracker
+                .Entries()
+                .Where(x => x.State != EntityState.Unchanged &&
+                            x.State != EntityState.Detached)
+                .ToList();
+
+            Console.WriteLine("Saving...");
+            changes.ForEach(x => Console.WriteLine(x.DebugView.LongView));
+        }
+        
+        private void ChangeTracker_StateChanged(object? ctx, EntityStateChangedEventArgs e)
+        {
+            var changed = e.Entry;
+            Console.WriteLine("state changes on...");
+            changed.CurrentValues.ToString();
+        }
+
+        private async void Ctx_SaveChangesFailed(object? ctx, SaveChangesFailedEventArgs e)
+        {
+            var changes = (ctx as TContext).ChangeTracker
+                .Entries()
+                .Where(x => x.State != EntityState.Unchanged &&
+                            x.State != EntityState.Detached)
+                .ToList();
+            Console.WriteLine("Saving FAILED...");
+            changes.ForEach(x => Console.WriteLine(x.DebugView.LongView));
+        }
+
+        private async void Ctx_SavedChanges(object? ctx, SavedChangesEventArgs e)
+        {
+            await (ctx as TContext).Database.CloseConnectionAsync();
             await CheckForStartupTaskAsync();
+            
             if (e.EntitiesSavedCount > 0)
             {
                 // unique to avoid conflicts. Is deleted after cahcing.
@@ -151,6 +214,8 @@ namespace SqliteWasmHelper
                 DoSwap(SqliteWasmDbContextFactory<TContext>.Filename, backupName);
                 lastStatus = await cache.SyncDbWithCacheAsync(backupName);
             }
+            
+            Console.WriteLine($"Saved {e.EntitiesSavedCount} entities OK...");
         }
 
         private async Task<int> RestoreAsync()

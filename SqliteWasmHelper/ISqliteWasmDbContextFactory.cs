@@ -18,5 +18,12 @@ namespace SqliteWasmHelper
         /// </summary>
         /// <returns>The new context.</returns>
         Task<TContext> CreateDbContextAsync();
+
+        /// <summary>
+        /// Gets the <see cref="DbContext"/>.
+        /// </summary>
+        /// <returns>The new context.</returns>
+        TContext CreateDbContext();
     }
+    
 }

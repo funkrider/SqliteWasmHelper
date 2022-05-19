@@ -10,5 +10,9 @@ namespace BlazorWasmExample.Data
         }
 
         public DbSet<Thing> Things { get; set; } = null!;
+
+        public DbSet<Person> Persons { get; set; } = null!;
+
+
     }
 }

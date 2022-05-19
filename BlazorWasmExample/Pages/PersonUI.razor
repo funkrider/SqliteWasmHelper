@@ -1,0 +1,61 @@
+﻿@using SqliteWasmHelper
+@using BlazorWasmExample.Data
+@using Microsoft.EntityFrameworkCore
+@using Ardalis.Specification
+@using Ardalis.Specification.EntityFrameworkCore
+
+@inject ISqliteWasmDbContextFactory<ThingContext> DbCtxFactory
+
+@inject DbStateRegistrar DbStateRegistrar
+
+
+<h2>Selected Person</h2>
+<div>@person?.Name</div>
+
+<input type="number" @bind-value="@SelectedPersonId"/>
+
+@code {
+
+	public Person? person { get; set; }
+
+	private int _selectedPersonId = 0;
+
+	[Parameter]
+	public int SelectedPersonId
+	{
+		get => _selectedPersonId;
+		set
+		{
+			_selectedPersonId = value;
+			RefreshPersonAsync();
+		}
+	}
+	
+	public ISpecification<Person> Query => new PersonSpec(SelectedPersonId);
+
+
+	protected override async Task OnInitializedAsync()
+	{
+		var qParams = new List<string>() { nameof(_selectedPersonId) };
+		
+		DbStateRegistrar.RegisterComponent<Person, ThingContext>(this, Query, this.DbCtxFactory, qParams, nameof(person));
+		
+		await base.OnInitializedAsync();
+	}
+
+	protected override Task OnParametersSetAsync()
+	{
+		Console.WriteLine("Params were set...");
+		return base.OnParametersSetAsync();
+	}
+
+	private async Task RefreshPersonAsync()
+	{
+		await using var ctx = await DbCtxFactory.CreateDbContextAsync();
+		person = ctx.Persons.WithSpecification(Query).SingleOrDefault();
+	}
+
+	// RegisterComponent(this, [DbCtxFac, Spec, [Params], OutPut]...)
+	// Dispose -> UnRegister(this)
+
+}
